@@ -124,7 +124,7 @@ class PathsConfig:
 
     c2p_map: str = ""
     p2c_map: str = ""
-    warp_method: str = "c2p"
+    warp_method: str = "p2c"
     rpcc_matrix: str = ""
     target_image_dir: str = "data/target_images"
     linear_pattern_dir: str = "data/linear_proj_patterns"

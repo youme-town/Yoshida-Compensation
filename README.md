@@ -114,7 +114,7 @@ wait_key_ms = 200
 [paths]
 c2p_map = ""                              # C2P 対応マップ (.npy)
 p2c_map = ""                              # P2C 対応マップ (.npy)
-warp_method = "c2p"                       # "c2p" または "p2c"
+warp_method = "p2c"                       # "c2p" または "p2c"
 rpcc_matrix = ""                          # RPCC 行列 (.npy)
 target_image_dir = "data/target_images"
 # ... 他のパスはデフォルト値あり
