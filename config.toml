@@ -4,22 +4,22 @@
 gamma = 2.2
 width = 1920
 height = 1080
-pos_x = 5360            # プロジェクタウィンドウの X 位置 (1920 + 3440)
+pos_x = 3840            # プロジェクタウィンドウの X 位置 (1920 + 3440)
 pos_y = 0               # プロジェクタウィンドウの Y 位置
 
 [camera]
 backend = "canon_edsdk" # "canon_edsdk" | "opencv"
-av = "8"
+av = "5"
 tv = "1/15"             # 分数表記・小数どちらも可
-iso = "400"
-image_quality = "LR"
+iso = "100"
+image_quality = "LJF"
 device_index = 0        # OpenCV backend 使用時のカメラインデックス
 wait_key_ms = 200       # パターン表示後の待機時間 (ms)
 
 [paths]
-c2p_map = ""            # C2P correspondence map (.npy)
+c2p_map = "external/GrayCode/result_c2p_compensated_delaunay.npy"            # C2P correspondence map (.npy)
 p2c_map = ""            # P2C correspondence map (.npy)
-warp_method = "p2c"     # "c2p" | "p2c"
+warp_method = "c2p"     # "c2p" | "p2c"
 rpcc_matrix = ""        # RPCC matrix (.npy)
 target_image_dir = "data/target_images"
 linear_pattern_dir = "data/linear_proj_patterns"
