@@ -9,17 +9,16 @@ from edsdk.camera_controller import CameraController
 # ========= 設定 =========
 CALIB_DIR = Path("data/chess_captured")  # cam_calib.py の出力先
 NPZ_PATH = CALIB_DIR / "camera_calib.npz"
-YAML_PATH = CALIB_DIR / "camera_calib.yaml"
 
-OUT_DIR = Path("pose_output")
+OUT_DIR = Path("data/pose_output")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 OUT_JSON_PATH = OUT_DIR / "pose_unity.json"
 
 # Canon撮影設定（必要なら変更）
-AV = 8
-TV = 1 / 10
-ISO = 160
+AV = 5
+TV = 1 / 15
+ISO = 200
 IMAGE_QUALITY = "LJF"
 
 # 推定方式：RANSACを使うなら True（推奨）
@@ -34,31 +33,16 @@ SOLVEPNP_FLAG = cv2.SOLVEPNP_ITERATIVE
 
 
 def load_intrinsics() -> tuple[np.ndarray, np.ndarray]:
-    """cam_calib.py の出力に合わせて K, dist を読み込む（NPZ優先、YAMLはfallback）。"""
+    """cam_in_calib.py の出力に合わせて K, dist を読み込む（NPZ優先、YAMLはfallback）。"""
     if NPZ_PATH.exists():
         data = np.load(str(NPZ_PATH))
         K = data["K"].astype(np.float64)
         dist = data["dist"].astype(np.float64).reshape(-1, 1)
         return K, dist
 
-    if YAML_PATH.exists():
-        fs = cv2.FileStorage(str(YAML_PATH), cv2.FILE_STORAGE_READ)
-        if not fs.isOpened():
-            raise RuntimeError(f"Failed to open: {YAML_PATH.resolve()}")
-        K = fs.getNode("K").mat()
-        dist = fs.getNode("dist").mat()
-        fs.release()
-
-        if K is None or K.size == 0:
-            raise ValueError("Key 'K' not found in camera_calib.yaml")
-        if dist is None or dist.size == 0:
-            dist = np.zeros((5, 1), dtype=np.float64)
-
-        return K.astype(np.float64), dist.astype(np.float64).reshape(-1, 1)
-
     raise FileNotFoundError(
-        "Calibration file not found. Run cam_calib.py first.\n"
-        f"Expected:\n  {NPZ_PATH.resolve()}\n  {YAML_PATH.resolve()}"
+        "Calibration file not found. Run cam_in_calib.py first.\n"
+        f"Expected:\n  {NPZ_PATH.resolve()}"
     )
 
 

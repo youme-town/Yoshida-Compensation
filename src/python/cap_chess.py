@@ -18,8 +18,8 @@ PREVIEW_SCALE = 0.6
 SHOW_OVERLAY = True
 
 # Canon露出（必要に応じて調整）
-AV = 8
-TV = 1 / 13
+AV = 5
+TV = 1 / 15
 ISO = 200
 IMAGE_QUALITY = "LJF"
 # ========================

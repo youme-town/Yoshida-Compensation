@@ -101,15 +101,6 @@ def save_results(out_dir: Path, K: np.ndarray, dist: np.ndarray) -> None:
     )
     print(f"Saved: {npz_path.name}")
 
-    yml_path = out_dir / "camera_calib.yaml"
-    fs = cv2.FileStorage(str(yml_path), cv2.FILE_STORAGE_WRITE)
-    fs.write("K", K)
-    fs.write("dist", dist)
-    fs.write("checkerboard_cols_rows", np.array(CHECKERBOARD, dtype=np.int32))
-    fs.write("square_size", float(SQUARE_SIZE))
-    fs.release()
-    print(f"Saved: {yml_path.name}")
-
 
 def main() -> None:
     print(f"Input dir: {IMAGEDIR.resolve()}")

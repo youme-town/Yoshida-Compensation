@@ -217,3 +217,4 @@ data/**/*.tiff
 *.npy
 *.csv
 *.png
+*.mp4
