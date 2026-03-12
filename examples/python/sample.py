@@ -161,7 +161,8 @@ def _warp_camera_array_to_projector(
         warped_tensor = full_warped[:, cy : cy + ch, cx : cx + cw]
 
     warped_array = warped_tensor.permute(1, 2, 0).numpy()
-    return warped_array.reshape(crop_rect[3], crop_rect[2], *src_shape[2:])
+    warped_height, warped_width = warped_array.shape[:2]
+    return warped_array.reshape(warped_height, warped_width, *src_shape[2:])
 
 
 def _ensure_matching_spatial_shape(

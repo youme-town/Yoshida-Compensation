@@ -578,3 +578,59 @@ def test_sample_warps_camera_target_for_p2c(
     calc_target_image, calc_cmm = calc_calls[0]
     assert np.array_equal(calc_target_image, projector_space_target)
     assert np.array_equal(calc_cmm, projector_space_cmm)
+
+
+def test_warp_camera_array_to_projector_uses_actual_output_shape_for_p2c(
+    monkeypatch,
+) -> None:
+    src_array = np.zeros((6, 4, 3), dtype=np.uint8)
+
+    class FakeWarper:
+        def backward_warp(self, src_tensor, dst_size, inpaint):
+            return sample.torch.zeros((src_tensor.shape[0], 2, 3), dtype=src_tensor.dtype)
+
+    monkeypatch.setattr(sample, "_create_warper", lambda *args, **kwargs: FakeWarper())
+
+    warped = sample._warp_camera_array_to_projector(
+        src_array,
+        "dummy.npy",
+        proj_width=3,
+        proj_height=2,
+        image_width=src_array.shape[1],
+        image_height=src_array.shape[0],
+        warp_method="p2c",
+    )
+
+    assert warped.shape == (2, 3, 3)
+
+
+def test_warp_camera_array_to_projector_uses_actual_output_shape_for_c2p(
+    monkeypatch,
+) -> None:
+    src_array = np.zeros((6, 4, 3), dtype=np.uint8)
+
+    class FakeWarper:
+        def forward_warp(
+            self,
+            src_tensor,
+            dst_size,
+            splat_method,
+            crop_rect,
+            inpaint,
+            aggregation,
+        ):
+            return sample.torch.zeros((src_tensor.shape[0], 2, 3), dtype=src_tensor.dtype)
+
+    monkeypatch.setattr(sample, "_create_warper", lambda *args, **kwargs: FakeWarper())
+
+    warped = sample._warp_camera_array_to_projector(
+        src_array,
+        "dummy.npy",
+        proj_width=3,
+        proj_height=2,
+        image_width=src_array.shape[1],
+        image_height=src_array.shape[0],
+        warp_method="c2p",
+    )
+
+    assert warped.shape == (2, 3, 3)
