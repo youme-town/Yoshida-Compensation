@@ -11,8 +11,8 @@ pos_y = 0               # プロジェクタウィンドウの Y 位置
 backend = "canon_edsdk" # "canon_edsdk" | "opencv"
 av = "5"
 tv = "1/15"             # 分数表記・小数どちらも可
-iso = "400"
-image_quality = "LJF"
+iso = "100"
+image_quality = "LR"
 device_index = 0        # OpenCV backend 使用時のカメラインデックス
 wait_key_ms = 200       # パターン表示後の待機時間 (ms)
 
