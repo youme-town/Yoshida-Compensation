@@ -1,0 +1,9 @@
+{
+  "warp_method": "p2c",
+  "target_image_space": "camera",
+  "pixel_map_path": "result_p2c_compensated_delaunay.npy",
+  "projector_size": {
+    "width": 1920,
+    "height": 1080
+  }
+}

@@ -11,14 +11,14 @@ pos_y = 0               # プロジェクタウィンドウの Y 位置
 backend = "canon_edsdk" # "canon_edsdk" | "opencv"
 av = "5"
 tv = "1/15"             # 分数表記・小数どちらも可
-iso = "100"
+iso = "200"
 image_quality = "LR"
 device_index = 0        # OpenCV backend 使用時のカメラインデックス
 wait_key_ms = 300       # パターン表示後の待機時間 (ms)
 
 [paths]
-c2p_map = "external/GrayCode/result_c2p_compensated_delaunay.npy"            # C2P correspondence map (.npy)
-p2c_map = "external/GrayCode/result_p2c_compensated_delaunay.npy"            # P2C correspondence map (.npy)
+c2p_map = "result_c2p_compensated_delaunay.npy"            # C2P correspondence map (.npy)
+p2c_map = "result_p2c_compensated_delaunay.npy"            # P2C correspondence map (.npy)
 warp_method = "p2c"     # "c2p" | "p2c"
 target_image_space = "camera"  # "camera" | "projector"
 rpcc_matrix = ""        # RPCC matrix (.npy)
