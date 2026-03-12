@@ -59,6 +59,7 @@ def _write_config(
     width: int,
     height: int,
     warp_method: str,
+    target_image_space: str = "projector",
     c2p_map: str = "",
     p2c_map: str = "",
 ) -> None:
@@ -80,6 +81,7 @@ wait_key_ms = 1
 c2p_map = "{c2p_map}"
 p2c_map = "{p2c_map}"
 warp_method = "{warp_method}"
+target_image_space = "{target_image_space}"
 target_image_dir = "data/target_images"
 linear_pattern_dir = "data/linear_proj_patterns"
 inv_gamma_pattern_dir = "data/inv_gamma_proj_patterns"
@@ -176,6 +178,7 @@ def test_sample_uses_camera_space_compensation_for_c2p(
         width=width,
         height=height,
         warp_method="c2p",
+        target_image_space="camera",
         c2p_map="maps/c2p.npy",
     )
 
@@ -233,6 +236,13 @@ def test_sample_uses_camera_space_compensation_for_c2p(
     monkeypatch.setattr(sample, "warp_image", fake_warp_image)
     monkeypatch.setattr(
         sample,
+        "invwarp_image",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("camera-space target should not be inverse warped for c2p")
+        ),
+    )
+    monkeypatch.setattr(
+        sample,
         "warp_color_mixing_matrices_to_projector",
         lambda *args, **kwargs: (_ for _ in ()).throw(
             AssertionError("c2p should not warp color mixing matrices")
@@ -247,6 +257,110 @@ def test_sample_uses_camera_space_compensation_for_c2p(
     assert calc_cmm is color_mixing_matrices
     assert len(warp_calls) == 1
     assert np.array_equal(warp_calls[0], compensation_input)
+
+
+def test_sample_inverse_warps_projector_target_for_c2p(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    width, height = 4, 3
+    data_dir = tmp_path / "data"
+    target_dir = data_dir / "target_images"
+    target_image = np.full((height, width, 3), 23, dtype=np.uint8)
+    camera_space_target = np.full((height, width, 3), 61, dtype=np.uint8)
+    _save_rgb_image(target_dir / "target.png", target_image)
+
+    config_path = tmp_path / "config.toml"
+    _write_config(
+        config_path,
+        width=width,
+        height=height,
+        warp_method="c2p",
+        target_image_space="projector",
+        c2p_map="maps/c2p.npy",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    _stub_window_calls(monkeypatch)
+    monkeypatch.setattr(
+        sample,
+        "generate_projection_patterns",
+        lambda *args, **kwargs: [np.zeros((height, width, 3), dtype=np.uint8)],
+    )
+    monkeypatch.setattr(
+        sample,
+        "apply_inverse_gamma_correction",
+        lambda image, gamma=None: image,
+    )
+    monkeypatch.setattr(
+        sample,
+        "capture_image",
+        lambda: np.zeros((height, width, 3), dtype=np.uint8),
+    )
+
+    color_mixing_matrices = np.ones((height, width, 4, 3), dtype=np.float32)
+    monkeypatch.setattr(
+        sample,
+        "calc_color_mixing_matrices",
+        lambda *args, **kwargs: color_mixing_matrices,
+    )
+
+    invwarp_calls: list[np.ndarray] = []
+
+    def fake_invwarp_image(
+        src_image: np.ndarray,
+        pixel_map_path: str,
+        proj_width: int,
+        proj_height: int,
+        cam_width: int,
+        cam_height: int,
+        warp_method: str = "c2p",
+    ) -> np.ndarray:
+        invwarp_calls.append(src_image.copy())
+        return camera_space_target
+
+    calc_calls: list[np.ndarray] = []
+
+    def fake_calc_compensation_image(
+        target_image: np.ndarray,
+        color_mixing_matrices: np.ndarray,
+        dtype,
+    ) -> np.ndarray:
+        calc_calls.append(target_image.copy())
+        return np.full((height, width, 3), 88, dtype=np.uint8)
+
+    warp_calls: list[np.ndarray] = []
+
+    def fake_warp_image(
+        src_image: np.ndarray,
+        pixel_map_path: str,
+        proj_width: int,
+        proj_height: int,
+        image_width: int,
+        image_height: int,
+        warp_method: str = "c2p",
+    ) -> np.ndarray:
+        warp_calls.append(src_image.copy())
+        return np.full((image_height, image_width, 3), 123, dtype=np.uint8)
+
+    monkeypatch.setattr(sample, "invwarp_image", fake_invwarp_image)
+    monkeypatch.setattr(sample, "calc_compensation_image", fake_calc_compensation_image)
+    monkeypatch.setattr(sample, "warp_image", fake_warp_image)
+    monkeypatch.setattr(
+        sample,
+        "warp_color_mixing_matrices_to_projector",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("c2p should not warp color mixing matrices")
+        ),
+    )
+
+    sample.main(["sample.py", "--config", str(config_path)])
+
+    assert len(invwarp_calls) == 1
+    assert np.array_equal(invwarp_calls[0], target_image)
+    assert len(calc_calls) == 1
+    assert np.array_equal(calc_calls[0], camera_space_target)
+    assert len(warp_calls) == 1
 
 
 def test_sample_uses_projector_space_compensation_for_p2c(
@@ -265,6 +379,7 @@ def test_sample_uses_projector_space_compensation_for_p2c(
         width=width,
         height=height,
         warp_method="p2c",
+        target_image_space="projector",
         p2c_map="maps/p2c.npy",
     )
 
@@ -287,7 +402,6 @@ def test_sample_uses_projector_space_compensation_for_p2c(
     )
 
     camera_space_cmm = np.ones((height, width, 4, 3), dtype=np.float32)
-    projector_space_target = np.full((height, width, 3), 44, dtype=np.uint8)
     projector_space_cmm = np.full((height, width, 4, 3), 2.0, dtype=np.float32)
 
     monkeypatch.setattr(
@@ -296,21 +410,20 @@ def test_sample_uses_projector_space_compensation_for_p2c(
         lambda *args, **kwargs: camera_space_cmm,
     )
 
-    warp_calls: list[np.ndarray] = []
-
-    def fake_warp_image(
-        src_image: np.ndarray,
-        pixel_map_path: str,
-        proj_width: int,
-        proj_height: int,
-        image_width: int,
-        image_height: int,
-        warp_method: str = "p2c",
-    ) -> np.ndarray:
-        warp_calls.append(src_image.copy())
-        if len(warp_calls) > 1:
-            raise AssertionError("p2c should not warp the compensation image again")
-        return projector_space_target
+    monkeypatch.setattr(
+        sample,
+        "warp_image",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("projector-space target should not be warped for p2c")
+        ),
+    )
+    monkeypatch.setattr(
+        sample,
+        "invwarp_image",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("p2c should not inverse warp projector-space target")
+        ),
+    )
 
     matrix_warp_calls: list[np.ndarray] = []
 
@@ -336,7 +449,118 @@ def test_sample_uses_projector_space_compensation_for_p2c(
         calc_calls.append((target_image.copy(), color_mixing_matrices.copy()))
         return np.full((height, width, 3), 200, dtype=np.uint8)
 
+    monkeypatch.setattr(
+        sample,
+        "warp_color_mixing_matrices_to_projector",
+        fake_warp_color_mixing_matrices_to_projector,
+    )
+    monkeypatch.setattr(sample, "calc_compensation_image", fake_calc_compensation_image)
+
+    sample.main(["sample.py", "--config", str(config_path)])
+
+    assert len(matrix_warp_calls) == 1
+    assert np.array_equal(matrix_warp_calls[0], camera_space_cmm)
+    assert len(calc_calls) == 1
+    calc_target_image, calc_cmm = calc_calls[0]
+    assert np.array_equal(calc_target_image, target_image)
+    assert np.array_equal(calc_cmm, projector_space_cmm)
+
+
+def test_sample_warps_camera_target_for_p2c(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    width, height = 4, 3
+    data_dir = tmp_path / "data"
+    target_dir = data_dir / "target_images"
+    target_image = np.full((height, width, 3), 21, dtype=np.uint8)
+    projector_space_target = np.full((height, width, 3), 44, dtype=np.uint8)
+    _save_rgb_image(target_dir / "target.png", target_image)
+
+    config_path = tmp_path / "config.toml"
+    _write_config(
+        config_path,
+        width=width,
+        height=height,
+        warp_method="p2c",
+        target_image_space="camera",
+        p2c_map="maps/p2c.npy",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    _stub_window_calls(monkeypatch)
+    monkeypatch.setattr(
+        sample,
+        "generate_projection_patterns",
+        lambda *args, **kwargs: [np.zeros((height, width, 3), dtype=np.uint8)],
+    )
+    monkeypatch.setattr(
+        sample,
+        "apply_inverse_gamma_correction",
+        lambda image, gamma=None: image,
+    )
+    monkeypatch.setattr(
+        sample,
+        "capture_image",
+        lambda: np.zeros((height, width, 3), dtype=np.uint8),
+    )
+
+    camera_space_cmm = np.ones((height, width, 4, 3), dtype=np.float32)
+    projector_space_cmm = np.full((height, width, 4, 3), 2.0, dtype=np.float32)
+
+    monkeypatch.setattr(
+        sample,
+        "calc_color_mixing_matrices",
+        lambda *args, **kwargs: camera_space_cmm,
+    )
+
+    warp_calls: list[np.ndarray] = []
+
+    def fake_warp_image(
+        src_image: np.ndarray,
+        pixel_map_path: str,
+        proj_width: int,
+        proj_height: int,
+        image_width: int,
+        image_height: int,
+        warp_method: str = "p2c",
+    ) -> np.ndarray:
+        warp_calls.append(src_image.copy())
+        return projector_space_target
+
     monkeypatch.setattr(sample, "warp_image", fake_warp_image)
+    monkeypatch.setattr(
+        sample,
+        "invwarp_image",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("camera-space target should not be inverse warped for p2c")
+        ),
+    )
+
+    matrix_warp_calls: list[np.ndarray] = []
+
+    def fake_warp_color_mixing_matrices_to_projector(
+        color_mixing_matrices: np.ndarray,
+        pixel_map_path: str,
+        proj_width: int,
+        proj_height: int,
+        image_width: int,
+        image_height: int,
+        warp_method: str = "p2c",
+    ) -> np.ndarray:
+        matrix_warp_calls.append(color_mixing_matrices.copy())
+        return projector_space_cmm
+
+    calc_calls: list[tuple[np.ndarray, np.ndarray]] = []
+
+    def fake_calc_compensation_image(
+        target_image: np.ndarray,
+        color_mixing_matrices: np.ndarray,
+        dtype,
+    ) -> np.ndarray:
+        calc_calls.append((target_image.copy(), color_mixing_matrices.copy()))
+        return np.full((height, width, 3), 200, dtype=np.uint8)
+
     monkeypatch.setattr(
         sample,
         "warp_color_mixing_matrices_to_projector",

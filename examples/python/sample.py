@@ -47,6 +47,7 @@ from src.python.config import (
 
 
 WarpMethod = Literal["c2p", "p2c"]
+TargetImageSpace = Literal["camera", "projector"]
 
 
 def resolve_warp_settings(paths: PathsConfig) -> tuple[WarpMethod, str]:
@@ -61,6 +62,23 @@ def resolve_warp_settings(paths: PathsConfig) -> tuple[WarpMethod, str]:
         key = "paths.c2p_map" if warp_method == "c2p" else "paths.p2c_map"
         raise ValueError(f"`{key}` is empty. Set a valid .npy path.")
     return warp_method, map_path
+
+
+def resolve_target_image_space(paths: PathsConfig) -> TargetImageSpace:
+    """Resolve the configured target-image coordinate system."""
+    target_image_space_raw = paths.target_image_space.strip().lower()
+    if target_image_space_raw not in ("camera", "projector"):
+        raise ValueError(
+            "Invalid `paths.target_image_space`. Use \"camera\" or \"projector\"."
+        )
+    return cast(TargetImageSpace, target_image_space_raw)
+
+
+def compensation_space_from_warp_method(
+    warp_method: WarpMethod,
+) -> TargetImageSpace:
+    """Return the coordinate system where compensation is computed."""
+    return "camera" if warp_method == "c2p" else "projector"
 
 
 def center_rect(
@@ -377,6 +395,43 @@ def warp_color_mixing_matrices_to_projector(
     return warped.astype(color_mixing_matrices.dtype, copy=False)
 
 
+def prepare_target_image_for_compensation(
+    target_image: np.ndarray,
+    target_image_space: TargetImageSpace,
+    pixel_map_path: str,
+    proj_width: int,
+    proj_height: int,
+    cam_width: int,
+    cam_height: int,
+    warp_method: WarpMethod,
+) -> np.ndarray:
+    """Convert the target image into the coordinate system used for compensation."""
+    compensation_space = compensation_space_from_warp_method(warp_method)
+    if target_image_space == compensation_space:
+        return target_image
+
+    if target_image_space == "projector":
+        return invwarp_image(
+            target_image,
+            pixel_map_path,
+            proj_width,
+            proj_height,
+            cam_width,
+            cam_height,
+            warp_method=warp_method,
+        )
+
+    return warp_image(
+        target_image,
+        pixel_map_path,
+        proj_width,
+        proj_height,
+        target_image.shape[1],
+        target_image.shape[0],
+        warp_method=warp_method,
+    )
+
+
 def invwarp_image(
     src_image: np.ndarray,
     pixel_map_path: str,
@@ -501,6 +556,7 @@ def main(argv: list[str] | None = None):
     paths = cfg.paths
     try:
         warp_method, pixel_map_path = resolve_warp_settings(paths)
+        target_image_space = resolve_target_image_space(paths)
     except ValueError as e:
         print(f"Invalid warp config: {e}")
         return
@@ -584,16 +640,30 @@ def main(argv: list[str] | None = None):
     # Calculate and save compensation images
     os.makedirs(paths.compensation_image_dir, exist_ok=True)
     os.makedirs(paths.inv_gamma_comp_dir, exist_ok=True)
+    cam_width = captured_images[0].shape[1]
+    cam_height = captured_images[0].shape[0]
+    compensation_space = compensation_space_from_warp_method(warp_method)
 
     for idx, target_image in enumerate(target_images):
-        if warp_method == "c2p":
+        compensation_target_image = prepare_target_image_for_compensation(
+            target_image,
+            target_image_space,
+            pixel_map_path,
+            proj.width,
+            proj.height,
+            cam_width,
+            cam_height,
+            warp_method,
+        )
+
+        if compensation_space == "camera":
             _ensure_matching_spatial_shape(
-                target_image,
+                compensation_target_image,
                 color_mixing_matrices,
                 "c2p compensation",
             )
             before_warped_compensation_image = calc_compensation_image(
-                target_image=target_image,
+                target_image=compensation_target_image,
                 color_mixing_matrices=color_mixing_matrices,
                 dtype=np.uint8,
             )
@@ -607,15 +677,6 @@ def main(argv: list[str] | None = None):
                 warp_method=warp_method,
             )
         else:
-            warped_target_image = warp_image(
-                target_image,
-                pixel_map_path,
-                proj.width,
-                proj.height,
-                target_image.shape[1],
-                target_image.shape[0],
-                warp_method=warp_method,
-            )
             warped_color_mixing_matrices = warp_color_mixing_matrices_to_projector(
                 color_mixing_matrices,
                 pixel_map_path,
@@ -626,12 +687,12 @@ def main(argv: list[str] | None = None):
                 warp_method=warp_method,
             )
             _ensure_matching_spatial_shape(
-                warped_target_image,
+                compensation_target_image,
                 warped_color_mixing_matrices,
                 "p2c compensation",
             )
             compensation_image = calc_compensation_image(
-                target_image=warped_target_image,
+                target_image=compensation_target_image,
                 color_mixing_matrices=warped_color_mixing_matrices,
                 dtype=np.uint8,
             )
